@@ -114,6 +114,5 @@ if audio_bytes is not None:
     except Exception:
         st.warning("Speech synthesis failed, but text response is shown above.")
 
-st.markdown("---")
-st.markdown("### 🙏 Thank you for using AI Medical Voice Agent")
-st.markdown("Developed by **Aditya Ranjan**")
+    st.markdown("---")
+    st.markdown("### 🙏 Thank you for using AI Medical Voice Agent by Aditya Ranjan")
