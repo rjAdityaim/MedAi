@@ -6,8 +6,7 @@ import google.generativeai as genai
 import os
 
 st.set_page_config(page_title="AI Medical Voice Agent", page_icon="🩺")
-
-st.title("🩺 AI Medical Voice Agent (Debug Mode)")
+st.title("🩺 AI Medical Voice Agent")
 
 api_key = st.secrets.get("GOOGLE_API_KEY")
 
@@ -15,25 +14,26 @@ if not api_key:
     st.error("GOOGLE_API_KEY missing in Streamlit secrets.")
     st.stop()
 
-st.write("API Key Loaded:", api_key[:10] + "...")
+genai.configure(api_key=api_key)
 
-try:
-    genai.configure(api_key=api_key)
-except Exception as e:
-    st.error(f"Gemini configuration error: {e}")
+def get_available_model():
+    try:
+        models = genai.list_models()
+        for m in models:
+            if "generateContent" in m.supported_generation_methods:
+                return m.name
+        return None
+    except Exception as e:
+        st.error(f"Model listing error: {e}")
+        return None
+
+model_name = get_available_model()
+
+if not model_name:
+    st.error("No available Gemini models support generateContent.")
     st.stop()
 
-st.subheader("🔎 Testing Gemini Connection")
-
-try:
-    test_model = genai.GenerativeModel("gemini-1.5-flash")
-    test_response = test_model.generate_content("Say hello")
-    st.success("Gemini test successful")
-    st.write("Test response:", test_response.text)
-except Exception as e:
-    st.error("Gemini test failed")
-    st.error(str(e))
-    st.stop()
+st.success(f"Using model: {model_name}")
 
 st.markdown("---")
 
@@ -45,8 +45,6 @@ if audio_bytes is not None:
         tmpfile.write(audio_bytes.read())
         audio_path = tmpfile.name
 
-    st.success("Audio received")
-
     recognizer = sr.Recognizer()
 
     try:
@@ -54,7 +52,7 @@ if audio_bytes is not None:
             audio_data = recognizer.record(source)
             user_text = recognizer.recognize_google(audio_data)
 
-        st.subheader("You said:")
+        st.subheader("🗣 You said:")
         st.write(user_text)
 
     except Exception as e:
@@ -64,30 +62,47 @@ if audio_bytes is not None:
 
     os.remove(audio_path)
 
+    emergency_keywords = [
+        "chest pain",
+        "suicidal",
+        "suicide",
+        "can't breathe",
+        "difficulty breathing",
+        "severe bleeding",
+        "heart attack",
+        "stroke"
+    ]
+
+    if any(word in user_text.lower() for word in emergency_keywords):
+        st.warning(
+            "⚠ If this may be a medical emergency, please seek immediate care."
+        )
+
     prompt = (
         "You are a safe medical information assistant. "
-        "Provide general health guidance only.\n\n"
+        "Provide general, evidence-based health guidance only. "
+        "Do not diagnose or prescribe.\n\n"
         f"Patient question: {user_text}"
     )
 
-    st.info("Generating Gemini response...")
+    st.info("Generating response...")
 
     try:
-        model = genai.GenerativeModel("gemini-1.5-flash")
+        model = genai.GenerativeModel(model_name)
         response = model.generate_content(prompt)
 
-        if not response:
-            st.error("Empty response from Gemini")
+        if not response or not hasattr(response, "text"):
+            st.error("Invalid response from Gemini.")
             st.stop()
 
         ai_text = response.text
-        st.subheader("AI Response:")
-        st.write(ai_text)
 
     except Exception as e:
-        st.error("Gemini generation error:")
-        st.error(str(e))
+        st.error(f"Gemini generation error: {e}")
         st.stop()
+
+    st.subheader("🤖 AI Response:")
+    st.write(ai_text)
 
     try:
         tts = gTTS(ai_text[:3000])
