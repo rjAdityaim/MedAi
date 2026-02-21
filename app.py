@@ -8,6 +8,10 @@ import os
 st.set_page_config(page_title="AI Medical Voice Agent", page_icon="🩺")
 st.title("🩺 AI Medical Voice Agent")
 
+st.caption(
+    "Speak your health question. This AI provides general medical information only — not diagnosis or treatment."
+)
+
 api_key = st.secrets.get("GOOGLE_API_KEY")
 
 if not api_key:
@@ -23,17 +27,14 @@ def get_available_model():
             if "generateContent" in m.supported_generation_methods:
                 return m.name
         return None
-    except Exception as e:
-        st.error(f"Model listing error: {e}")
+    except Exception:
         return None
 
 model_name = get_available_model()
 
 if not model_name:
-    st.error("No available Gemini models support generateContent.")
+    st.error("No available Gemini models found.")
     st.stop()
-
-st.success(f"Using model: {model_name}")
 
 st.markdown("---")
 
@@ -55,8 +56,8 @@ if audio_bytes is not None:
         st.subheader("🗣 You said:")
         st.write(user_text)
 
-    except Exception as e:
-        st.error(f"Speech recognition error: {e}")
+    except Exception:
+        st.error("Speech recognition failed. Please try again.")
         os.remove(audio_path)
         st.stop()
 
@@ -75,13 +76,13 @@ if audio_bytes is not None:
 
     if any(word in user_text.lower() for word in emergency_keywords):
         st.warning(
-            "⚠ If this may be a medical emergency, please seek immediate care."
+            "⚠ If this may be a medical emergency, please seek immediate medical care."
         )
 
     prompt = (
         "You are a safe medical information assistant. "
         "Provide general, evidence-based health guidance only. "
-        "Do not diagnose or prescribe.\n\n"
+        "Do not diagnose or prescribe treatments.\n\n"
         f"Patient question: {user_text}"
     )
 
@@ -92,13 +93,13 @@ if audio_bytes is not None:
         response = model.generate_content(prompt)
 
         if not response or not hasattr(response, "text"):
-            st.error("Invalid response from Gemini.")
+            st.error("Invalid response from AI.")
             st.stop()
 
         ai_text = response.text
 
-    except Exception as e:
-        st.error(f"Gemini generation error: {e}")
+    except Exception:
+        st.error("Error generating response.")
         st.stop()
 
     st.subheader("🤖 AI Response:")
@@ -110,5 +111,9 @@ if audio_bytes is not None:
         tts.save(tts_file.name)
         st.audio(tts_file.name)
         os.remove(tts_file.name)
-    except Exception as e:
-        st.warning(f"TTS error: {e}")
+    except Exception:
+        st.warning("Speech synthesis failed, but text response is shown above.")
+
+st.markdown("---")
+st.markdown("### 🙏 Thank you for using AI Medical Voice Agent")
+st.markdown("Developed by **Aditya Ranjan**")
