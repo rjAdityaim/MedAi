@@ -5,20 +5,35 @@ from gtts import gTTS
 import google.generativeai as genai
 import os
 
+st.set_page_config(page_title="AI Medical Voice Agent", page_icon="🩺")
+
+st.title("🩺 AI Medical Voice Agent (Debug Mode)")
+
 api_key = st.secrets.get("GOOGLE_API_KEY")
 
 if not api_key:
-    st.error("Missing GOOGLE_API_KEY in Streamlit secrets.")
+    st.error("GOOGLE_API_KEY missing in Streamlit secrets.")
     st.stop()
 
-genai.configure(api_key=api_key)
+st.write("API Key Loaded:", api_key[:10] + "...")
 
-st.set_page_config(page_title="AI Medical Voice Agent", page_icon="🩺")
-st.title("🩺 AI Medical Voice Agent")
-st.caption(
-    "Speak your health question. "
-    "This AI provides general medical information only — not diagnosis or treatment."
-)
+try:
+    genai.configure(api_key=api_key)
+except Exception as e:
+    st.error(f"Gemini configuration error: {e}")
+    st.stop()
+
+st.subheader("🔎 Testing Gemini Connection")
+
+try:
+    test_model = genai.GenerativeModel("gemini-1.5-flash")
+    test_response = test_model.generate_content("Say hello")
+    st.success("Gemini test successful")
+    st.write("Test response:", test_response.text)
+except Exception as e:
+    st.error("Gemini test failed")
+    st.error(str(e))
+    st.stop()
 
 st.markdown("---")
 
@@ -30,7 +45,7 @@ if audio_bytes is not None:
         tmpfile.write(audio_bytes.read())
         audio_path = tmpfile.name
 
-    st.success("✅ Audio received!")
+    st.success("Audio received")
 
     recognizer = sr.Recognizer()
 
@@ -39,75 +54,46 @@ if audio_bytes is not None:
             audio_data = recognizer.record(source)
             user_text = recognizer.recognize_google(audio_data)
 
-        st.subheader("🗣 You said:")
+        st.subheader("You said:")
         st.write(user_text)
 
-    except sr.UnknownValueError:
-        st.error("⚠ Could not understand audio. Please try again.")
-        os.remove(audio_path)
-        st.stop()
-
-    except sr.RequestError:
-        st.error("⚠ Speech recognition service unavailable.")
+    except Exception as e:
+        st.error(f"Speech recognition error: {e}")
         os.remove(audio_path)
         st.stop()
 
     os.remove(audio_path)
 
-    emergency_keywords = [
-        "chest pain",
-        "suicidal",
-        "suicide",
-        "can't breathe",
-        "difficulty breathing",
-        "severe bleeding",
-        "heart attack",
-        "stroke"
-    ]
-
-    if any(word in user_text.lower() for word in emergency_keywords):
-        st.warning(
-            "⚠ If this may be a medical emergency, "
-            "please seek immediate medical care or call emergency services."
-        )
-
-    st.info("💬 Generating response...")
-
     prompt = (
-        "You are a factual and safe medical information assistant. "
-        "Provide helpful, general, evidence-based health guidance. "
-        "Do not diagnose, prescribe medication, or replace a doctor. "
-        "Encourage seeking professional care when appropriate.\n\n"
+        "You are a safe medical information assistant. "
+        "Provide general health guidance only.\n\n"
         f"Patient question: {user_text}"
     )
+
+    st.info("Generating Gemini response...")
 
     try:
         model = genai.GenerativeModel("gemini-1.5-flash")
         response = model.generate_content(prompt)
 
-        if not response or not hasattr(response, "text"):
-            st.error("⚠ Invalid response from Gemini.")
+        if not response:
+            st.error("Empty response from Gemini")
             st.stop()
 
         ai_text = response.text
+        st.subheader("AI Response:")
+        st.write(ai_text)
 
-    except Exception:
-        st.error("⚠ Error connecting to Gemini API.")
+    except Exception as e:
+        st.error("Gemini generation error:")
+        st.error(str(e))
         st.stop()
-
-    st.subheader("🤖 AI Response:")
-    st.write(ai_text)
 
     try:
         tts = gTTS(ai_text[:3000])
         tts_file = tempfile.NamedTemporaryFile(delete=False, suffix=".mp3")
         tts.save(tts_file.name)
-
-        st.audio(tts_file.name, format="audio/mp3")
-
+        st.audio(tts_file.name)
         os.remove(tts_file.name)
-
-        st.success("🎯 Response generated successfully!")
-
-    except Exception:
-        st.warning("Speech synthesis failed, but text response is available above.")
+    except Exception as e:
+        st.warning(f"TTS error: {e}")
